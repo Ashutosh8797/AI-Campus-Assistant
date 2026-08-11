@@ -1,140 +1,342 @@
-const Maintenance = require("../models/Maintenance");
+const MaintenanceRequest = require("../models/MaintenanceRequest");
 
-const createMaintenance = async (req, res) => {
+// =====================================================
+// CREATE MAINTENANCE REQUEST
+// Student reports a campus problem
+// =====================================================
+
+const createMaintenanceRequest = async (req, res) => {
   try {
-    const { title, description, category, location, priority } = req.body;
-
-    if (!title || !description || !category || !location) {
-      return res.status(400).json({
-        success: false,
-        message: "Title, description, category and location are required",
-      });
-    }
-
-    const maintenance = await Maintenance.create({
+    const {
       title,
       description,
       category,
       location,
-      priority: priority || "MEDIUM",
+    } = req.body;
+
+    if (!title || !description || !location) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Title, description and location are required",
+      });
+    }
+
+    const request = await MaintenanceRequest.create({
+      title: title.trim(),
+      description: description.trim(),
+      category: category || "OTHER",
+      location: location.trim(),
       reportedBy: req.user.id,
+      status: "PENDING",
     });
 
-    res.status(201).json({
+    const populatedRequest =
+      await MaintenanceRequest.findById(request._id)
+        .populate(
+          "reportedBy",
+          "name email studentId department role"
+        )
+        .populate(
+          "assignedTo",
+          "name email studentId role"
+        );
+
+    return res.status(201).json({
       success: true,
-      message: "Maintenance complaint submitted successfully",
-      maintenance,
+      message: "Maintenance request submitted successfully",
+      request: populatedRequest,
     });
   } catch (error) {
-    console.error("Create maintenance error:", error);
-    res.status(500).json({
+    console.error(
+      "Create maintenance request error:",
+      error
+    );
+
+    return res.status(500).json({
       success: false,
-      message: "Server error while submitting complaint",
+      message:
+        "Server error while creating maintenance request",
     });
   }
 };
 
-const getMaintenance = async (req, res) => {
-  try {
-    const filter =
-      req.user.role === "ADMIN"
-        ? {}
-        : { reportedBy: req.user.id };
+// =====================================================
+// GET MY MAINTENANCE REQUESTS
+// Student sees only their own reports
+// =====================================================
 
-    const maintenance = await Maintenance.find(filter)
-      .populate("reportedBy", "name email role")
-      .populate("assignedTo", "name email role")
+const getMyMaintenanceRequests = async (req, res) => {
+  try {
+    const requests = await MaintenanceRequest.find({
+      reportedBy: req.user.id,
+    })
+      .populate(
+        "reportedBy",
+        "name email studentId department role"
+      )
+      .populate(
+        "assignedTo",
+        "name email studentId role"
+      )
       .sort({ createdAt: -1 });
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
-      count: maintenance.length,
-      maintenance,
+      count: requests.length,
+      requests,
     });
   } catch (error) {
-    console.error("Get maintenance error:", error);
-    res.status(500).json({
+    console.error(
+      "Get my maintenance requests error:",
+      error
+    );
+
+    return res.status(500).json({
       success: false,
-      message: "Server error while fetching complaints",
+      message:
+        "Server error while fetching your maintenance requests",
     });
   }
 };
 
-const getMaintenanceById = async (req, res) => {
-  try {
-    const maintenance = await Maintenance.findById(req.params.id)
-      .populate("reportedBy", "name email role")
-      .populate("assignedTo", "name email role");
+// =====================================================
+// GET ALL MAINTENANCE REQUESTS
+// Admin only
+// =====================================================
 
-    if (!maintenance) {
+const getAllMaintenanceRequests = async (req, res) => {
+  try {
+    const { status, category } = req.query;
+
+    const filter = {};
+
+    if (status) {
+      const allowedStatuses = [
+        "PENDING",
+        "IN_PROGRESS",
+        "RESOLVED",
+        "REJECTED",
+      ];
+
+      const normalizedStatus = status.toUpperCase();
+
+      if (!allowedStatuses.includes(normalizedStatus)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid maintenance request status",
+        });
+      }
+
+      filter.status = normalizedStatus;
+    }
+
+    if (category) {
+      const allowedCategories = [
+        "ELECTRICAL",
+        "PLUMBING",
+        "CLEANING",
+        "HOSTEL",
+        "CLASSROOM",
+        "FURNITURE",
+        "INTERNET",
+        "OTHER",
+      ];
+
+      const normalizedCategory = category.toUpperCase();
+
+      if (!allowedCategories.includes(normalizedCategory)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid maintenance category",
+        });
+      }
+
+      filter.category = normalizedCategory;
+    }
+
+    const requests = await MaintenanceRequest.find(filter)
+      .populate(
+        "reportedBy",
+        "name email studentId department role"
+      )
+      .populate(
+        "assignedTo",
+        "name email studentId role"
+      )
+      .sort({ createdAt: -1 });
+
+    return res.status(200).json({
+      success: true,
+      count: requests.length,
+      requests,
+    });
+  } catch (error) {
+    console.error(
+      "Get all maintenance requests error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "Server error while fetching maintenance requests",
+    });
+  }
+};
+
+// =====================================================
+// GET MAINTENANCE REQUEST BY ID
+// Student can view own request
+// Admin can view any request
+// =====================================================
+
+const getMaintenanceRequestById = async (req, res) => {
+  try {
+    const request = await MaintenanceRequest.findById(
+      req.params.id
+    )
+      .populate(
+        "reportedBy",
+        "name email studentId department role"
+      )
+      .populate(
+        "assignedTo",
+        "name email studentId role"
+      );
+
+    if (!request) {
       return res.status(404).json({
         success: false,
-        message: "Maintenance complaint not found",
+        message: "Maintenance request not found",
       });
     }
 
-    if (
-      req.user.role !== "ADMIN" &&
-      maintenance.reportedBy._id.toString() !== req.user.id
-    ) {
+    const isOwner =
+      request.reportedBy._id.toString() === req.user.id;
+
+    const isAdmin = req.user.role === "ADMIN";
+
+    if (!isOwner && !isAdmin) {
       return res.status(403).json({
         success: false,
-        message: "Access denied",
+        message:
+          "You are not authorized to view this maintenance request",
       });
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
-      maintenance,
+      request,
     });
   } catch (error) {
-    console.error("Get maintenance by ID error:", error);
-    res.status(500).json({
+    console.error(
+      "Get maintenance request by ID error:",
+      error
+    );
+
+    return res.status(500).json({
       success: false,
-      message: "Server error while fetching complaint",
+      message:
+        "Server error while fetching maintenance request",
     });
   }
 };
 
-const updateMaintenance = async (req, res) => {
+// =====================================================
+// UPDATE MAINTENANCE REQUEST
+// Admin only
+// =====================================================
+
+const updateMaintenanceRequest = async (req, res) => {
   try {
-    const { status, priority, resolutionNote, assignedTo } = req.body;
+    const {
+      status,
+      assignedTo,
+      adminNote,
+    } = req.body;
 
-    const maintenance = await Maintenance.findById(req.params.id);
+    const request = await MaintenanceRequest.findById(
+      req.params.id
+    );
 
-    if (!maintenance) {
+    if (!request) {
       return res.status(404).json({
         success: false,
-        message: "Maintenance complaint not found",
+        message: "Maintenance request not found",
       });
     }
 
-    if (status !== undefined) maintenance.status = status;
-    if (priority !== undefined) maintenance.priority = priority;
-    if (resolutionNote !== undefined) {
-      maintenance.resolutionNote = resolutionNote;
+    if (status !== undefined) {
+      const allowedStatuses = [
+        "PENDING",
+        "IN_PROGRESS",
+        "RESOLVED",
+        "REJECTED",
+      ];
+
+      if (!allowedStatuses.includes(status)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid maintenance request status",
+        });
+      }
+
+      request.status = status;
     }
-    if (assignedTo !== undefined) maintenance.assignedTo = assignedTo;
 
-    await maintenance.save();
+    if (assignedTo !== undefined) {
+      if (assignedTo === null || assignedTo === "") {
+        request.assignedTo = null;
+      } else {
+        request.assignedTo = assignedTo;
+      }
+    }
 
-    res.status(200).json({
+    if (adminNote !== undefined) {
+      request.adminNote = adminNote.trim();
+    }
+
+    await request.save();
+
+    const populatedRequest =
+      await MaintenanceRequest.findById(request._id)
+        .populate(
+          "reportedBy",
+          "name email studentId department role"
+        )
+        .populate(
+          "assignedTo",
+          "name email studentId role"
+        );
+
+    return res.status(200).json({
       success: true,
-      message: "Maintenance complaint updated successfully",
-      maintenance,
+      message: "Maintenance request updated successfully",
+      request: populatedRequest,
     });
   } catch (error) {
-    console.error("Update maintenance error:", error);
-    res.status(500).json({
+    console.error(
+      "Update maintenance request error:",
+      error
+    );
+
+    return res.status(500).json({
       success: false,
-      message: "Server error while updating complaint",
+      message:
+        "Server error while updating maintenance request",
     });
   }
 };
 
+// =====================================================
+// EXPORTS
+// =====================================================
+
 module.exports = {
-  createMaintenance,
-  getMaintenance,
-  getMaintenanceById,
-  updateMaintenance,
+  createMaintenanceRequest,
+  getMyMaintenanceRequests,
+  getAllMaintenanceRequests,
+  getMaintenanceRequestById,
+  updateMaintenanceRequest,
 };
