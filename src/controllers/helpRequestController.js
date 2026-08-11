@@ -39,15 +39,14 @@ const createHelpRequest = async (req, res) => {
       });
     }
 
-    // Prevent students from requesting their own service
     if (service.provider.toString() === req.user.id) {
       return res.status(400).json({
         success: false,
-        message: "You cannot request help from your own service",
+        message:
+          "You cannot request help from your own service",
       });
     }
 
-    // Prevent duplicate pending requests
     const existingRequest = await HelpRequest.findOne({
       service: serviceId,
       requester: req.user.id,
@@ -57,7 +56,8 @@ const createHelpRequest = async (req, res) => {
     if (existingRequest) {
       return res.status(409).json({
         success: false,
-        message: "You already have a pending request for this service",
+        message:
+          "You already have a pending request for this service",
       });
     }
 
@@ -68,23 +68,22 @@ const createHelpRequest = async (req, res) => {
       message: message.trim(),
     });
 
-    const populatedRequest = await HelpRequest.findById(
-      helpRequest._id
-    )
-      .populate(
-        "service",
-        "title description category status"
-      )
-      .populate(
-        "requester",
-        "name email studentId department batchYear"
-      )
-      .populate(
-        "provider",
-        "name email studentId department batchYear"
-      );
+    const populatedRequest =
+      await HelpRequest.findById(helpRequest._id)
+        .populate(
+          "service",
+          "title description category status"
+        )
+        .populate(
+          "requester",
+          "name email studentId department batchYear"
+        )
+        .populate(
+          "provider",
+          "name email studentId department batchYear"
+        );
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       message: "Help request sent successfully",
       helpRequest: populatedRequest,
@@ -92,9 +91,10 @@ const createHelpRequest = async (req, res) => {
   } catch (error) {
     console.error("Create help request error:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
-      message: "Server error while creating help request",
+      message:
+        "Server error while creating help request",
     });
   }
 };
@@ -118,7 +118,7 @@ const getMyRequests = async (req, res) => {
       )
       .sort({ createdAt: -1 });
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       count: requests.length,
       requests,
@@ -126,9 +126,10 @@ const getMyRequests = async (req, res) => {
   } catch (error) {
     console.error("Get my requests error:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
-      message: "Server error while fetching your requests",
+      message:
+        "Server error while fetching your requests",
     });
   }
 };
@@ -152,7 +153,7 @@ const getReceivedRequests = async (req, res) => {
       )
       .sort({ createdAt: -1 });
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       count: requests.length,
       requests,
@@ -160,9 +161,50 @@ const getReceivedRequests = async (req, res) => {
   } catch (error) {
     console.error("Get received requests error:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
-      message: "Server error while fetching received requests",
+      message:
+        "Server error while fetching received requests",
+    });
+  }
+};
+
+// =====================================================
+// ADMIN GET ALL HELP REQUESTS
+// =====================================================
+
+const getAllHelpRequests = async (req, res) => {
+  try {
+    const requests = await HelpRequest.find({})
+      .populate(
+        "service",
+        "title description category status"
+      )
+      .populate(
+        "requester",
+        "name email studentId department batchYear"
+      )
+      .populate(
+        "provider",
+        "name email studentId department batchYear"
+      )
+      .sort({ createdAt: -1 });
+
+    return res.status(200).json({
+      success: true,
+      count: requests.length,
+      requests,
+    });
+  } catch (error) {
+    console.error(
+      "Get all help requests error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "Server error while fetching all help requests",
     });
   }
 };
@@ -184,18 +226,22 @@ const acceptHelpRequest = async (req, res) => {
       });
     }
 
-    // Only the provider can accept the request
-    if (helpRequest.provider.toString() !== req.user.id) {
+    if (
+      helpRequest.provider.toString() !==
+      req.user.id
+    ) {
       return res.status(403).json({
         success: false,
-        message: "You are not authorized to accept this request",
+        message:
+          "You are not authorized to accept this request",
       });
     }
 
     if (helpRequest.status !== "PENDING") {
       return res.status(400).json({
         success: false,
-        message: "Only pending requests can be accepted",
+        message:
+          "Only pending requests can be accepted",
       });
     }
 
@@ -203,23 +249,22 @@ const acceptHelpRequest = async (req, res) => {
 
     await helpRequest.save();
 
-    const populatedRequest = await HelpRequest.findById(
-      helpRequest._id
-    )
-      .populate(
-        "service",
-        "title description category status"
-      )
-      .populate(
-        "requester",
-        "name email studentId department batchYear"
-      )
-      .populate(
-        "provider",
-        "name email studentId department batchYear"
-      );
+    const populatedRequest =
+      await HelpRequest.findById(helpRequest._id)
+        .populate(
+          "service",
+          "title description category status"
+        )
+        .populate(
+          "requester",
+          "name email studentId department batchYear"
+        )
+        .populate(
+          "provider",
+          "name email studentId department batchYear"
+        );
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: "Help request accepted",
       helpRequest: populatedRequest,
@@ -227,9 +272,10 @@ const acceptHelpRequest = async (req, res) => {
   } catch (error) {
     console.error("Accept help request error:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
-      message: "Server error while accepting help request",
+      message:
+        "Server error while accepting help request",
     });
   }
 };
@@ -251,18 +297,22 @@ const rejectHelpRequest = async (req, res) => {
       });
     }
 
-    // Only the provider can reject the request
-    if (helpRequest.provider.toString() !== req.user.id) {
+    if (
+      helpRequest.provider.toString() !==
+      req.user.id
+    ) {
       return res.status(403).json({
         success: false,
-        message: "You are not authorized to reject this request",
+        message:
+          "You are not authorized to reject this request",
       });
     }
 
     if (helpRequest.status !== "PENDING") {
       return res.status(400).json({
         success: false,
-        message: "Only pending requests can be rejected",
+        message:
+          "Only pending requests can be rejected",
       });
     }
 
@@ -270,23 +320,22 @@ const rejectHelpRequest = async (req, res) => {
 
     await helpRequest.save();
 
-    const populatedRequest = await HelpRequest.findById(
-      helpRequest._id
-    )
-      .populate(
-        "service",
-        "title description category status"
-      )
-      .populate(
-        "requester",
-        "name email studentId department batchYear"
-      )
-      .populate(
-        "provider",
-        "name email studentId department batchYear"
-      );
+    const populatedRequest =
+      await HelpRequest.findById(helpRequest._id)
+        .populate(
+          "service",
+          "title description category status"
+        )
+        .populate(
+          "requester",
+          "name email studentId department batchYear"
+        )
+        .populate(
+          "provider",
+          "name email studentId department batchYear"
+        );
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: "Help request rejected",
       helpRequest: populatedRequest,
@@ -294,9 +343,10 @@ const rejectHelpRequest = async (req, res) => {
   } catch (error) {
     console.error("Reject help request error:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
-      message: "Server error while rejecting help request",
+      message:
+        "Server error while rejecting help request",
     });
   }
 };
@@ -318,18 +368,22 @@ const cancelHelpRequest = async (req, res) => {
       });
     }
 
-    // Only the requester can cancel
-    if (helpRequest.requester.toString() !== req.user.id) {
+    if (
+      helpRequest.requester.toString() !==
+      req.user.id
+    ) {
       return res.status(403).json({
         success: false,
-        message: "You are not authorized to cancel this request",
+        message:
+          "You are not authorized to cancel this request",
       });
     }
 
     if (helpRequest.status !== "PENDING") {
       return res.status(400).json({
         success: false,
-        message: "Only pending requests can be cancelled",
+        message:
+          "Only pending requests can be cancelled",
       });
     }
 
@@ -337,7 +391,7 @@ const cancelHelpRequest = async (req, res) => {
 
     await helpRequest.save();
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: "Help request cancelled",
       helpRequest,
@@ -345,17 +399,23 @@ const cancelHelpRequest = async (req, res) => {
   } catch (error) {
     console.error("Cancel help request error:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
-      message: "Server error while cancelling help request",
+      message:
+        "Server error while cancelling help request",
     });
   }
 };
+
+// =====================================================
+// EXPORTS
+// =====================================================
 
 module.exports = {
   createHelpRequest,
   getMyRequests,
   getReceivedRequests,
+  getAllHelpRequests,
   acceptHelpRequest,
   rejectHelpRequest,
   cancelHelpRequest,

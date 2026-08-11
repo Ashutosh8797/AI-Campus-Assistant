@@ -477,6 +477,42 @@ const updateLostFoundItem = async (req, res) => {
 };
 
 // =====================================================
+// ADMIN GET ALL LOST / FOUND ITEMS
+// =====================================================
+
+const getAllLostFoundItems = async (req, res) => {
+  try {
+    const items = await LostFound.find({})
+      .populate(
+        "reportedBy",
+        "name email studentId department role"
+      )
+      .populate(
+        "claimedBy",
+        "name email studentId department role"
+      )
+      .sort({ createdAt: -1 });
+
+    return res.status(200).json({
+      success: true,
+      count: items.length,
+      items,
+    });
+  } catch (error) {
+    console.error(
+      "Get all lost and found items error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "Server error while fetching all lost and found items",
+    });
+  }
+};
+
+// =====================================================
 // EXPORTS
 // =====================================================
 
@@ -487,4 +523,5 @@ module.exports = {
   getLostFoundById,
   claimLostFoundItem,
   updateLostFoundItem,
+  getAllLostFoundItems,
 };

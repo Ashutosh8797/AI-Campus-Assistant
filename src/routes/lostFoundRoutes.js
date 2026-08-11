@@ -7,6 +7,7 @@ const {
   getLostFoundById,
   claimLostFoundItem,
   updateLostFoundItem,
+  getAllLostFoundItems,
 } = require("../controllers/lostFoundController");
 
 const protect = require("../middleware/authMiddleware");
@@ -27,15 +28,17 @@ router.get("/", protect, getLostFoundItems);
 // View my own reports
 router.get("/my", protect, getMyLostFoundItems);
 
-// Claim a found item
-router.post("/:id/claim", protect, claimLostFoundItem);
-
-// View a specific item
-router.get("/:id", protect, getLostFoundById);
-
 // =====================================================
 // ADMIN ROUTES
 // =====================================================
+
+// View all lost and found records
+router.get(
+  "/admin/all",
+  protect,
+  requireRole("ADMIN"),
+  getAllLostFoundItems
+);
 
 // Update item status, claim information or admin note
 router.put(
@@ -44,5 +47,15 @@ router.put(
   requireRole("ADMIN"),
   updateLostFoundItem
 );
+
+// =====================================================
+// ITEM ROUTES
+// =====================================================
+
+// Claim a found item
+router.post("/:id/claim", protect, claimLostFoundItem);
+
+// View a specific item
+router.get("/:id", protect, getLostFoundById);
 
 module.exports = router;
