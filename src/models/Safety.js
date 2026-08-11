@@ -42,7 +42,12 @@ const safetySchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["REPORTED", "INVESTIGATING", "RESOLVED"],
+      enum: [
+        "REPORTED",
+        "INVESTIGATING",
+        "RESOLVED",
+        "REJECTED",
+      ],
       default: "REPORTED",
     },
 
@@ -50,6 +55,12 @@ const safetySchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
+    },
+
+    assignedTo: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
     },
 
     resolutionNote: {
