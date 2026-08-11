@@ -25,16 +25,29 @@ const knowledgeSchema = new mongoose.Schema(
       required: true,
       enum: [
         "ACADEMICS",
+        "ADMISSIONS",
         "ADMINISTRATION",
+        "CAMPUS",
         "FACILITIES",
         "HOSTEL",
         "LIBRARY",
         "EXAM",
         "FEES",
         "TRANSPORT",
+        "HEALTH",
+        "SPORTS",
+        "EVENTS",
+        "CONTACTS",
         "GENERAL",
       ],
       default: "GENERAL",
+    },
+
+    campus: {
+      type: String,
+      enum: ["VIJAYAWADA"],
+      default: "VIJAYAWADA",
+      required: true,
     },
 
     department: {
@@ -46,6 +59,23 @@ const knowledgeSchema = new mongoose.Schema(
     keywords: {
       type: [String],
       default: [],
+    },
+
+    sourceTitle: {
+      type: String,
+      default: "Official KL University Website",
+      trim: true,
+    },
+
+    sourceUrl: {
+      type: String,
+      default: "https://www.kluniversity.in/",
+      trim: true,
+    },
+
+    lastVerified: {
+      type: Date,
+      default: Date.now,
     },
 
     isPublished: {

@@ -1,6 +1,10 @@
 ﻿const Knowledge = require("../models/Knowledge");
 
-// Create a knowledge entry
+// =====================================================
+// CREATE KNOWLEDGE
+// ADMIN ONLY
+// =====================================================
+
 const createKnowledge = async (req, res) => {
   try {
     const {
@@ -10,83 +14,182 @@ const createKnowledge = async (req, res) => {
       category,
       department,
       keywords,
-      isPublished,
+      sourceTitle,
+      sourceUrl,
+      lastVerified,
     } = req.body;
 
-    if (!title || !question || !answer || !category) {
+    if (!title || !question || !answer) {
       return res.status(400).json({
         success: false,
-        message: "Title, question, answer and category are required",
+        message: "Title, question and answer are required",
       });
     }
 
+    const allowedCategories = [
+      "ACADEMICS",
+      "ADMISSIONS",
+      "ADMINISTRATION",
+      "CAMPUS",
+      "FACILITIES",
+      "HOSTEL",
+      "LIBRARY",
+      "EXAM",
+      "FEES",
+      "TRANSPORT",
+      "HEALTH",
+      "SPORTS",
+      "EVENTS",
+      "CONTACTS",
+      "GENERAL",
+    ];
+
+    const normalizedCategory = (
+      category || "GENERAL"
+    ).toUpperCase();
+
+    if (!allowedCategories.includes(normalizedCategory)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid knowledge category",
+      });
+    }
+
+    const normalizedKeywords = Array.isArray(keywords)
+      ? keywords
+          .map((keyword) => String(keyword).trim().toLowerCase())
+          .filter(Boolean)
+      : [];
+
+    let verifiedDate = Date.now();
+
+    if (lastVerified) {
+      const parsedDate = new Date(lastVerified);
+
+      if (Number.isNaN(parsedDate.getTime())) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid lastVerified date",
+        });
+      }
+
+      verifiedDate = parsedDate;
+    }
+
     const knowledge = await Knowledge.create({
-      title,
-      question,
-      answer,
-      category,
-      department: department || "ALL",
-      keywords: keywords || [],
-      isPublished: isPublished !== undefined ? isPublished : true,
+      title: title.trim(),
+      question: question.trim(),
+      answer: answer.trim(),
+      category: normalizedCategory,
+      campus: "VIJAYAWADA",
+      department: department
+        ? department.trim()
+        : "ALL",
+      keywords: normalizedKeywords,
+      sourceTitle: sourceTitle
+        ? sourceTitle.trim()
+        : "Official KL University Website",
+      sourceUrl: sourceUrl
+        ? sourceUrl.trim()
+        : "https://www.kluniversity.in/",
+      lastVerified: verifiedDate,
+      isPublished: true,
       createdBy: req.user.id,
     });
 
-    res.status(201).json({
+    const populatedKnowledge = await Knowledge.findById(
+      knowledge._id
+    ).populate(
+      "createdBy",
+      "name email studentId department role"
+    );
+
+    return res.status(201).json({
       success: true,
-      message: "Knowledge entry created successfully",
-      knowledge,
+      message: "Knowledge created successfully",
+      knowledge: populatedKnowledge,
     });
   } catch (error) {
     console.error("Create knowledge error:", error);
 
-    if (error.name === "ValidationError") {
-      return res.status(400).json({
-        success: false,
-        message: error.message,
-      });
-    }
-
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Server error while creating knowledge",
     });
   }
 };
 
-// Get all knowledge entries
+// =====================================================
+// GET PUBLISHED KNOWLEDGE
+// STUDENTS + ADMIN
+// =====================================================
+
 const getKnowledge = async (req, res) => {
   try {
-    const { category, department, search } = req.query;
-    const filter = {};
+    const {
+      category,
+      department,
+      search,
+    } = req.query;
 
-    if (req.user.role === "STUDENT") {
-      filter.isPublished = true;
-    }
+    const filter = {
+      campus: "VIJAYAWADA",
+      isPublished: true,
+    };
 
     if (category) {
-      filter.category = category;
+      const normalizedCategory =
+        category.toUpperCase();
+
+      filter.category = normalizedCategory;
     }
 
     if (department) {
-      filter.department = {
-        $in: [department, "ALL"],
-      };
+      filter.department = department.trim();
     }
 
-    if (search) {
+    if (search && search.trim()) {
+      const searchText = search.trim();
+
       filter.$or = [
-        { title: { $regex: search, $options: "i" } },
-        { question: { $regex: search, $options: "i" } },
-        { answer: { $regex: search, $options: "i" } },
-        { keywords: { $regex: search, $options: "i" } },
+        {
+          title: {
+            $regex: searchText,
+            $options: "i",
+          },
+        },
+        {
+          question: {
+            $regex: searchText,
+            $options: "i",
+          },
+        },
+        {
+          answer: {
+            $regex: searchText,
+            $options: "i",
+          },
+        },
+        {
+          keywords: {
+            $regex: searchText,
+            $options: "i",
+          },
+        },
       ];
     }
 
     const knowledge = await Knowledge.find(filter)
-      .populate("createdBy", "name email role")
-      .sort({ createdAt: -1 });
+      .populate(
+        "createdBy",
+        "name email studentId department role"
+      )
+      .sort({
+        category: 1,
+        createdAt: -1,
+      });
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       count: knowledge.length,
       knowledge,
@@ -94,53 +197,182 @@ const getKnowledge = async (req, res) => {
   } catch (error) {
     console.error("Get knowledge error:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Server error while fetching knowledge",
     });
   }
 };
 
-// Get one knowledge entry
-const getKnowledgeById = async (req, res) => {
+// =====================================================
+// GET ALL KNOWLEDGE
+// ADMIN ONLY
+// Includes unpublished records
+// =====================================================
+
+const getAllKnowledge = async (req, res) => {
   try {
+    const {
+      category,
+      department,
+      isPublished,
+      search,
+    } = req.query;
+
     const filter = {
-      _id: req.params.id,
+      campus: "VIJAYAWADA",
     };
 
-    if (req.user.role === "STUDENT") {
-      filter.isPublished = true;
+    if (category) {
+      filter.category =
+        category.toUpperCase();
     }
 
-    const knowledge = await Knowledge.findOne(filter).populate(
+    if (department) {
+      filter.department = department.trim();
+    }
+
+    if (isPublished !== undefined) {
+      if (isPublished === "true") {
+        filter.isPublished = true;
+      } else if (isPublished === "false") {
+        filter.isPublished = false;
+      } else {
+        return res.status(400).json({
+          success: false,
+          message:
+            "isPublished must be true or false",
+        });
+      }
+    }
+
+    if (search && search.trim()) {
+      const searchText = search.trim();
+
+      filter.$or = [
+        {
+          title: {
+            $regex: searchText,
+            $options: "i",
+          },
+        },
+        {
+          question: {
+            $regex: searchText,
+            $options: "i",
+          },
+        },
+        {
+          answer: {
+            $regex: searchText,
+            $options: "i",
+          },
+        },
+        {
+          keywords: {
+            $regex: searchText,
+            $options: "i",
+          },
+        },
+      ];
+    }
+
+    const knowledge = await Knowledge.find(filter)
+      .populate(
+        "createdBy",
+        "name email studentId department role"
+      )
+      .sort({
+        createdAt: -1,
+      });
+
+    return res.status(200).json({
+      success: true,
+      count: knowledge.length,
+      knowledge,
+    });
+  } catch (error) {
+    console.error(
+      "Get all knowledge error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "Server error while fetching all knowledge",
+    });
+  }
+};
+
+// =====================================================
+// GET KNOWLEDGE BY ID
+// =====================================================
+
+const getKnowledgeById = async (req, res) => {
+  try {
+    const knowledge = await Knowledge.findOne({
+      _id: req.params.id,
+      campus: "VIJAYAWADA",
+    }).populate(
       "createdBy",
-      "name email role"
+      "name email studentId department role"
     );
 
     if (!knowledge) {
       return res.status(404).json({
         success: false,
-        message: "Knowledge entry not found",
+        message: "Knowledge item not found",
       });
     }
 
-    res.status(200).json({
+    if (
+      !knowledge.isPublished &&
+      req.user.role !== "ADMIN"
+    ) {
+      return res.status(404).json({
+        success: false,
+        message: "Knowledge item not found",
+      });
+    }
+
+    return res.status(200).json({
       success: true,
       knowledge,
     });
   } catch (error) {
-    console.error("Get knowledge by ID error:", error);
+    console.error(
+      "Get knowledge by ID error:",
+      error
+    );
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
-      message: "Server error while fetching knowledge",
+      message:
+        "Server error while fetching knowledge item",
     });
   }
 };
 
-// Update a knowledge entry
+// =====================================================
+// UPDATE KNOWLEDGE
+// ADMIN ONLY
+// =====================================================
+
 const updateKnowledge = async (req, res) => {
   try {
+    const knowledge = await Knowledge.findOne({
+      _id: req.params.id,
+      campus: "VIJAYAWADA",
+    });
+
+    if (!knowledge) {
+      return res.status(404).json({
+        success: false,
+        message: "Knowledge item not found",
+      });
+    }
+
     const {
       title,
       question,
@@ -148,89 +380,186 @@ const updateKnowledge = async (req, res) => {
       category,
       department,
       keywords,
+      sourceTitle,
+      sourceUrl,
+      lastVerified,
       isPublished,
     } = req.body;
 
-    const updateFields = {};
-
-    if (title !== undefined) updateFields.title = title;
-    if (question !== undefined) updateFields.question = question;
-    if (answer !== undefined) updateFields.answer = answer;
-    if (category !== undefined) updateFields.category = category;
-    if (department !== undefined) updateFields.department = department;
-    if (keywords !== undefined) updateFields.keywords = keywords;
-    if (isPublished !== undefined) updateFields.isPublished = isPublished;
-
-    if (Object.keys(updateFields).length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "No valid fields provided for update",
-      });
+    if (title !== undefined) {
+      knowledge.title = title.trim();
     }
 
-    const knowledge = await Knowledge.findByIdAndUpdate(req.params.id, updateFields, {
-      new: true,
-      runValidators: true,
-    });
-
-    if (!knowledge) {
-      return res.status(404).json({
-        success: false,
-        message: "Knowledge entry not found",
-      });
+    if (question !== undefined) {
+      knowledge.question = question.trim();
     }
 
-    res.status(200).json({
+    if (answer !== undefined) {
+      knowledge.answer = answer.trim();
+    }
+
+    if (category !== undefined) {
+      const allowedCategories = [
+        "ACADEMICS",
+        "ADMISSIONS",
+        "ADMINISTRATION",
+        "CAMPUS",
+        "FACILITIES",
+        "HOSTEL",
+        "LIBRARY",
+        "EXAM",
+        "FEES",
+        "TRANSPORT",
+        "HEALTH",
+        "SPORTS",
+        "EVENTS",
+        "CONTACTS",
+        "GENERAL",
+      ];
+
+      const normalizedCategory =
+        category.toUpperCase();
+
+      if (
+        !allowedCategories.includes(
+          normalizedCategory
+        )
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid knowledge category",
+        });
+      }
+
+      knowledge.category = normalizedCategory;
+    }
+
+    if (department !== undefined) {
+      knowledge.department =
+        department.trim();
+    }
+
+    if (keywords !== undefined) {
+      if (!Array.isArray(keywords)) {
+        return res.status(400).json({
+          success: false,
+          message: "Keywords must be an array",
+        });
+      }
+
+      knowledge.keywords = keywords
+        .map((keyword) =>
+          String(keyword)
+            .trim()
+            .toLowerCase()
+        )
+        .filter(Boolean);
+    }
+
+    if (sourceTitle !== undefined) {
+      knowledge.sourceTitle =
+        sourceTitle.trim();
+    }
+
+    if (sourceUrl !== undefined) {
+      knowledge.sourceUrl =
+        sourceUrl.trim();
+    }
+
+    if (lastVerified !== undefined) {
+      const parsedDate = new Date(lastVerified);
+
+      if (Number.isNaN(parsedDate.getTime())) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Invalid lastVerified date",
+        });
+      }
+
+      knowledge.lastVerified = parsedDate;
+    }
+
+    if (isPublished !== undefined) {
+      knowledge.isPublished = Boolean(
+        isPublished
+      );
+    }
+
+    await knowledge.save();
+
+    const populatedKnowledge =
+      await Knowledge.findById(
+        knowledge._id
+      ).populate(
+        "createdBy",
+        "name email studentId department role"
+      );
+
+    return res.status(200).json({
       success: true,
-      message: "Knowledge entry updated successfully",
-      knowledge,
+      message: "Knowledge updated successfully",
+      knowledge: populatedKnowledge,
     });
   } catch (error) {
-    console.error("Update knowledge error:", error);
+    console.error(
+      "Update knowledge error:",
+      error
+    );
 
-    if (error.name === "ValidationError") {
-      return res.status(400).json({
-        success: false,
-        message: error.message,
-      });
-    }
-
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
-      message: "Server error while updating knowledge",
+      message:
+        "Server error while updating knowledge",
     });
   }
 };
 
-// Delete a knowledge entry
+// =====================================================
+// DELETE KNOWLEDGE
+// ADMIN ONLY
+// =====================================================
+
 const deleteKnowledge = async (req, res) => {
   try {
-    const knowledge = await Knowledge.findByIdAndDelete(req.params.id);
+    const knowledge = await Knowledge.findOneAndDelete({
+      _id: req.params.id,
+      campus: "VIJAYAWADA",
+    });
 
     if (!knowledge) {
       return res.status(404).json({
         success: false,
-        message: "Knowledge entry not found",
+        message: "Knowledge item not found",
       });
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
-      message: "Knowledge entry deleted successfully",
+      message: "Knowledge deleted successfully",
     });
   } catch (error) {
-    console.error("Delete knowledge error:", error);
+    console.error(
+      "Delete knowledge error:",
+      error
+    );
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
-      message: "Server error while deleting knowledge",
+      message:
+        "Server error while deleting knowledge",
     });
   }
 };
+
+// =====================================================
+// EXPORTS
+// =====================================================
 
 module.exports = {
   createKnowledge,
   getKnowledge,
+  getAllKnowledge,
   getKnowledgeById,
   updateKnowledge,
   deleteKnowledge,

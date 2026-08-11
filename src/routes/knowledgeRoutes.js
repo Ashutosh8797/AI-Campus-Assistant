@@ -3,6 +3,7 @@
 const {
   createKnowledge,
   getKnowledge,
+  getAllKnowledge,
   getKnowledgeById,
   updateKnowledge,
   deleteKnowledge,
@@ -13,27 +14,50 @@ const requireRole = require("../middleware/roleMiddleware");
 
 const router = express.Router();
 
-// Health check endpoint for knowledge API
-router.get("/test", (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: "Knowledge API is working",
-  });
-});
+// =====================================================
+// STUDENT + ADMIN
+// =====================================================
 
-// Create knowledge entry — requires admin role
-router.post("/", protect, requireRole("ADMIN"), createKnowledge);
-
-// Get all published knowledge — authenticated users only
+// Browse published Vijayawada campus knowledge
 router.get("/", protect, getKnowledge);
 
-// Get one knowledge entry — authenticated users only
+// View one published knowledge item
 router.get("/:id", protect, getKnowledgeById);
 
-// Update knowledge entry — requires admin role
-router.put("/:id", protect, requireRole("ADMIN"), updateKnowledge);
+// =====================================================
+// ADMIN ONLY
+// =====================================================
 
-// Delete knowledge entry — requires admin role
-router.delete("/:id", protect, requireRole("ADMIN"), deleteKnowledge);
+// Create knowledge
+router.post(
+  "/",
+  protect,
+  requireRole("ADMIN"),
+  createKnowledge
+);
+
+// View all knowledge including unpublished
+router.get(
+  "/admin/all",
+  protect,
+  requireRole("ADMIN"),
+  getAllKnowledge
+);
+
+// Update knowledge
+router.put(
+  "/:id",
+  protect,
+  requireRole("ADMIN"),
+  updateKnowledge
+);
+
+// Delete knowledge
+router.delete(
+  "/:id",
+  protect,
+  requireRole("ADMIN"),
+  deleteKnowledge
+);
 
 module.exports = router;
