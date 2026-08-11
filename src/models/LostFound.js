@@ -63,6 +63,18 @@ const lostFoundSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
+
+    claimedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+
+    adminNote: {
+      type: String,
+      default: "",
+      trim: true,
+    },
   },
   {
     timestamps: true,

@@ -2,9 +2,11 @@ const express = require("express");
 
 const {
   createLostFound,
-  getLostFound,
+  getLostFoundItems,
+  getMyLostFoundItems,
   getLostFoundById,
-  updateLostFound,
+  claimLostFoundItem,
+  updateLostFoundItem,
 } = require("../controllers/lostFoundController");
 
 const protect = require("../middleware/authMiddleware");
@@ -12,17 +14,35 @@ const requireRole = require("../middleware/roleMiddleware");
 
 const router = express.Router();
 
+// =====================================================
+// STUDENT ROUTES
+// =====================================================
+
+// Report a lost or found item
 router.post("/", protect, createLostFound);
 
-router.get("/", protect, getLostFound);
+// Search / browse open lost and found items
+router.get("/", protect, getLostFoundItems);
 
+// View my own reports
+router.get("/my", protect, getMyLostFoundItems);
+
+// Claim a found item
+router.post("/:id/claim", protect, claimLostFoundItem);
+
+// View a specific item
 router.get("/:id", protect, getLostFoundById);
 
+// =====================================================
+// ADMIN ROUTES
+// =====================================================
+
+// Update item status, claim information or admin note
 router.put(
   "/:id",
   protect,
   requireRole("ADMIN"),
-  updateLostFound
+  updateLostFoundItem
 );
 
 module.exports = router;
