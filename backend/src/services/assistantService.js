@@ -50,7 +50,6 @@ const stopWords = new Set([
   "please",
   "tell",
   "about",
-  "tell",
 ]);
 
 // =====================================================
@@ -86,7 +85,10 @@ const getSearchTerms = (text) => {
 // CALCULATE KNOWLEDGE RELEVANCE
 // =====================================================
 
-const calculateRelevance = (item, searchTerms) => {
+const calculateRelevance = (
+  item,
+  searchTerms
+) => {
   const titleWords = new Set(
     normalizeText(item.title)
   );
@@ -100,10 +102,9 @@ const calculateRelevance = (item, searchTerms) => {
   );
 
   const keywordWords = new Set(
-    (item.keywords || [])
-      .flatMap((keyword) =>
-        normalizeText(keyword)
-      )
+    (item.keywords || []).flatMap(
+      (keyword) => normalizeText(keyword)
+    )
   );
 
   const categoryWords = new Set(
@@ -113,34 +114,29 @@ const calculateRelevance = (item, searchTerms) => {
   let score = 0;
 
   for (const term of searchTerms) {
-    // Strongest match: title
     if (titleWords.has(term)) {
       score += 10;
     }
 
-    // Strong match: question
     if (questionWords.has(term)) {
       score += 8;
     }
 
-    // Keyword match
     if (keywordWords.has(term)) {
       score += 7;
     }
 
-    // Category match
     if (categoryWords.has(term)) {
       score += 5;
     }
 
-    // Answer match
     if (answerWords.has(term)) {
       score += 2;
     }
   }
 
-  // Exact phrase match gets an additional boost.
-  const searchPhrase = searchTerms.join(" ");
+  const searchPhrase =
+    searchTerms.join(" ");
 
   const titleText = String(
     item.title || ""
@@ -168,17 +164,91 @@ const calculateRelevance = (item, searchTerms) => {
 };
 
 // =====================================================
+// BUILD SOURCES
+// =====================================================
+
+const buildSources = (knowledge) => {
+  return knowledge.map((item) => ({
+    id: item._id,
+    title: item.title,
+    category: item.category,
+    sourceTitle: item.sourceTitle,
+    sourceUrl: item.sourceUrl,
+    lastVerified: item.lastVerified,
+  }));
+};
+
+// =====================================================
+// FALLBACK RESPONSE
+// =====================================================
+
+const buildFallbackResponse = (
+  knowledge,
+  searchText
+) => {
+  /*
+   * Gemini is optional here.
+   *
+   * If Gemini is unavailable because of:
+   * - quota
+   * - rate limit
+   * - temporary API error
+   *
+   * we still return the verified answer
+   * from MongoDB.
+   */
+
+  const bestKnowledge =
+    knowledge[0];
+
+  if (!bestKnowledge) {
+    return {
+      message:
+        "I couldn't find that information in the verified Vijayawada campus knowledge base.",
+      sources: [],
+    };
+  }
+
+  const answer =
+    String(bestKnowledge.answer || "").trim();
+
+  if (!answer) {
+    return {
+      message:
+        "I found a relevant campus record, but it does not contain an answer for this question yet.",
+      sources: buildSources(
+        knowledge
+      ),
+    };
+  }
+
+  return {
+    message:
+      `${answer}\n\n` +
+      "This answer is provided directly from the verified campus knowledge base.",
+    sources: buildSources(
+      knowledge
+    ),
+  };
+};
+
+// =====================================================
 // CHAT WITH ASSISTANT
 // =====================================================
 
-const chatWithAssistant = async (message, user) => {
-  const searchText = message.trim();
+const chatWithAssistant = async (
+  message,
+  user
+) => {
+  const searchText =
+    String(message || "").trim();
 
   // ===================================================
   // SEARCH TERMS
   // ===================================================
 
-  const searchTerms = getSearchTerms(searchText);
+  const searchTerms =
+    getSearchTerms(searchText);
 
   // ===================================================
   // BASE FILTER
@@ -188,8 +258,11 @@ const chatWithAssistant = async (message, user) => {
     campus: "VIJAYAWADA",
   };
 
-  // Students can only access published knowledge.
-  // Admins can also access unpublished knowledge.
+  // Students can only access published
+  // knowledge.
+  //
+  // Admins can also access unpublished
+  // knowledge.
   if (user.role !== "ADMIN") {
     baseFilter.isPublished = true;
   }
@@ -199,8 +272,8 @@ const chatWithAssistant = async (message, user) => {
   // ===================================================
 
   if (searchTerms.length > 0) {
-    baseFilter.$or = searchTerms.flatMap(
-      (term) => [
+    baseFilter.$or =
+      searchTerms.flatMap((term) => [
         {
           title: {
             $regex: term,
@@ -231,18 +304,16 @@ const chatWithAssistant = async (message, user) => {
             $options: "i",
           },
         },
-      ]
-    );
+      ]);
   }
 
-  let knowledge = await Knowledge.find(
-    baseFilter
-  )
-    .sort({
-      lastVerified: -1,
-      updatedAt: -1,
-    })
-    .limit(20);
+  let knowledge =
+    await Knowledge.find(baseFilter)
+      .sort({
+        lastVerified: -1,
+        updatedAt: -1,
+      })
+      .limit(20);
 
   // ===================================================
   // RELEVANCE SCORING
@@ -256,7 +327,9 @@ const chatWithAssistant = async (message, user) => {
         searchTerms
       ),
     }))
-    .filter((entry) => entry.score > 0)
+    .filter(
+      (entry) => entry.score > 0
+    )
     .sort((a, b) => {
       if (b.score !== a.score) {
         return b.score - a.score;
@@ -287,7 +360,7 @@ const chatWithAssistant = async (message, user) => {
   }
 
   // ===================================================
-  // BUILD VERIFIED CONTEXT
+  // VERIFIED CONTEXT
   // ===================================================
 
   const context = knowledge
@@ -335,28 +408,69 @@ ${searchText}
   // GEMINI
   // ===================================================
 
-  const interaction = await ai.interactions.create({
-    model: "gemini-3.6-flash",
-    system_instruction: systemInstruction,
-    input,
-    store: false,
-  });
+  try {
+    const interaction =
+      await ai.interactions.create({
+        model: "gemini-3.6-flash",
+        system_instruction:
+          systemInstruction,
+        input,
+        store: false,
+      });
 
-  // ===================================================
-  // RESPONSE
-  // ===================================================
+    const aiMessage =
+      String(
+        interaction.output_text || ""
+      ).trim();
 
-  return {
-    message: interaction.output_text,
-    sources: knowledge.map((item) => ({
-      id: item._id,
-      title: item.title,
-      category: item.category,
-      sourceTitle: item.sourceTitle,
-      sourceUrl: item.sourceUrl,
-      lastVerified: item.lastVerified,
-    })),
-  };
+    if (aiMessage) {
+      return {
+        message: aiMessage,
+        sources:
+          buildSources(knowledge),
+      };
+    }
+
+    // Gemini returned no text.
+    // Use verified DB answer.
+    console.warn(
+      "Gemini returned an empty response. Using knowledge fallback."
+    );
+
+    return buildFallbackResponse(
+      knowledge,
+      searchText
+    );
+  } catch (error) {
+    // =================================================
+    // GEMINI ERROR
+    // =================================================
+
+    console.error(
+      "Gemini request failed. Using verified knowledge fallback.",
+      {
+        status:
+          error?.status ||
+          error?.statusCode,
+        code: error?.code,
+        message: error?.message,
+      }
+    );
+
+    /*
+     * IMPORTANT:
+     *
+     * We intentionally DO NOT throw the error here.
+     *
+     * The verified MongoDB answer remains available
+     * even if Gemini is unavailable.
+     */
+
+    return buildFallbackResponse(
+      knowledge,
+      searchText
+    );
+  }
 };
 
 module.exports = {

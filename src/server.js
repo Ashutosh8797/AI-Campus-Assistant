@@ -4,36 +4,18 @@ const mongoose = require("mongoose");
 require("dotenv").config();
 
 const authRoutes = require("./routes/authRoutes");
-const knowledgeRoutes = require("./routes/knowledgeRoutes");
-const assistantRoutes = require("./routes/assistantRoutes");
-const maintenanceRoutes = require("./routes/maintenanceRoutes");
-const safetyRoutes = require("./routes/safetyRoutes");
-const lostFoundRoutes = require("./routes/lostFoundRoutes");
-const serviceRoutes = require("./routes/serviceRoutes");
-const helpRequestRoutes = require("./routes/helpRequestRoutes");
+const protect = require("./middleware/authMiddleware");
 
 const app = express();
 
+// Middleware
 app.use(cors());
 app.use(express.json());
 
-// ==========================================
-// API ROUTES
-// ==========================================
-
+// Routes
 app.use("/api/auth", authRoutes);
-app.use("/api/knowledge", knowledgeRoutes);
-app.use("/api/assistant", assistantRoutes);
-app.use("/api/maintenance", maintenanceRoutes);
-app.use("/api/safety", safetyRoutes);
-app.use("/api/lost-found", lostFoundRoutes);
-app.use("/api/services", serviceRoutes);
-app.use("/api/help-requests", helpRequestRoutes);
 
-// ==========================================
-// HOME
-// ==========================================
-
+// Health check
 app.get("/", (req, res) => {
   res.json({
     success: true,
@@ -41,10 +23,16 @@ app.get("/", (req, res) => {
   });
 });
 
-// ==========================================
-// DATABASE
-// ==========================================
+// Protected test route
+app.get("/api/protected", protect, (req, res) => {
+  res.json({
+    success: true,
+    message: "You have access to a protected route",
+    user: req.user,
+  });
+});
 
+// MongoDB connection
 mongoose
   .connect(process.env.MONGODB_URI)
   .then(() => {
@@ -55,10 +43,7 @@ mongoose
     console.error(error.message);
   });
 
-// ==========================================
-// START SERVER
-// ==========================================
-
+// Server
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
