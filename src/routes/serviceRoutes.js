@@ -4,6 +4,8 @@ const {
   createService,
   getServices,
   getServiceById,
+  getMyServices,
+  getAllServices,
   updateService,
   deleteService,
 } = require("../controllers/serviceController");
@@ -13,16 +15,22 @@ const protect = require("../middleware/authMiddleware");
 const router = express.Router();
 
 // =====================================================
-// HELP SERVICES
+// CAMPUS SERVICE MARKETPLACE
 // =====================================================
 
-// Create a help service
+// Create a service
 router.post("/", protect, createService);
 
-// Get/search active help services
+// Get active services / search / filter
 router.get("/", protect, getServices);
 
-// Get one help service
+// Get services created by logged-in provider
+router.get("/my", protect, getMyServices);
+
+// Admin: get all services including inactive
+router.get("/admin/all", protect, getAllServices);
+
+// Get one service
 router.get("/:id", protect, getServiceById);
 
 // Update own service or admin-managed service
