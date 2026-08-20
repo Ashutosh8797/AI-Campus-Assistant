@@ -12,6 +12,7 @@ const {
 
 const protect = require("../middleware/authMiddleware");
 const requireRole = require("../middleware/roleMiddleware");
+const upload = require("../middleware/uploadMiddleware");
 
 const router = express.Router();
 
@@ -19,14 +20,47 @@ const router = express.Router();
 // STUDENT ROUTES
 // =====================================================
 
+// Upload Lost & Found photo
+router.post(
+  "/upload",
+  protect,
+  upload.single("image"),
+  (req, res) => {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "Please select an image",
+      });
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: "Image uploaded successfully",
+      imageUrl: `/uploads/${req.file.filename}`,
+    });
+  }
+);
+
 // Report a lost or found item
-router.post("/", protect, createLostFound);
+router.post(
+  "/",
+  protect,
+  createLostFound
+);
 
 // Search / browse open lost and found items
-router.get("/", protect, getLostFoundItems);
+router.get(
+  "/",
+  protect,
+  getLostFoundItems
+);
 
 // View my own reports
-router.get("/my", protect, getMyLostFoundItems);
+router.get(
+  "/my",
+  protect,
+  getMyLostFoundItems
+);
 
 // =====================================================
 // ADMIN ROUTES
@@ -53,9 +87,17 @@ router.put(
 // =====================================================
 
 // Claim a found item
-router.post("/:id/claim", protect, claimLostFoundItem);
+router.post(
+  "/:id/claim",
+  protect,
+  claimLostFoundItem
+);
 
 // View a specific item
-router.get("/:id", protect, getLostFoundById);
+router.get(
+  "/:id",
+  protect,
+  getLostFoundById
+);
 
 module.exports = router;

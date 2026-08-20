@@ -10,6 +10,8 @@ import ResetPassword from "./pages/ResetPassword";
 import AIAssistant from "./pages/AIAssistant";
 import KnowledgeHub from "./pages/KnowledgeHub";
 import Maintenance from "./pages/Maintenance";
+import Safety from "./pages/Safety";
+import LostFound from "./pages/LostFound";
 
 import ProtectedRoute from "./components/layout/ProtectedRoute";
 
@@ -80,6 +82,32 @@ function App() {
         element={
           <ProtectedRoute>
             <Maintenance />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* =========================
+          SAFETY & SECURITY
+      ========================== */}
+
+      <Route
+        path="/safety"
+        element={
+          <ProtectedRoute>
+            <Safety />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* =========================
+          LOST & FOUND
+      ========================== */}
+
+      <Route
+        path="/lost-found"
+        element={
+          <ProtectedRoute>
+            <LostFound />
           </ProtectedRoute>
         }
       />
